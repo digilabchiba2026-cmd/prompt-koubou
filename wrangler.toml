@@ -12,7 +12,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "prompt-koubou-db"
-database_id = "<ここにwrangler d1 createの出力を貼り付け>"
+database_id = "536171a3-75ed-4789-8a3c-0f9a0abe5b75"
 
 # 月次バッチ(毎月1日 03:00 JST = 18:00 UTC(前日))
 [triggers]
