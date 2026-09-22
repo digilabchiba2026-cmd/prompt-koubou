@@ -1,0 +1,24 @@
+name = "prompt-koubou"
+main = "worker/index.js"
+compatibility_date = "2026-09-01"
+
+# 静的サイト(site/ 配下)をASSETSとして配信
+[assets]
+directory = "./site"
+binding = "ASSETS"
+
+# D1データベース (事前に `wrangler d1 create prompt-koubou-db` で作成し、
+# 出力された database_id をここに貼り付けてください)
+[[d1_databases]]
+binding = "DB"
+database_name = "prompt-koubou-db"
+database_id = "<ここにwrangler d1 createの出力を貼り付け>"
+
+# 月次バッチ(毎月1日 03:00 JST = 18:00 UTC(前日))
+[triggers]
+crons = ["0 18 1 * *"]
+
+# Secrets(値はリポジトリに含めない。以下のコマンドで別途登録):
+#   wrangler secret put GEMINI_API_KEY
+#   wrangler secret put SLACK_BOT_TOKEN
+#   wrangler secret put SLACK_CHANNEL_ID

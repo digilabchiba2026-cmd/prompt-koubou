@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>プロンプト工房</title>
+</head>
+<body>
+<style>
+  :root{
+    --paper:#F2F0E8;
+    --paper-line:#E3DFD1;
+    --ink:#26241F;
+    --ink-soft:#5C594F;
+    --card:#FCFBF7;
+    --card-border:#DEDACB;
+    --accent:#2B4C5C;
+    --accent-soft:#DCE7E8;
+    --chip-p-bg:#DCE7F5; --chip-p-fg:#1E4E7A;
+    --chip-d-bg:#DEEEDD; --chip-d-fg:#215C33;
+    --chip-c-bg:#F6E8CE; --chip-c-fg:#7A5316;
+    --chip-a-bg:#F5DEDC; --chip-a-fg:#8A2F26;
+    --sub-kokugo:#B14A3A;
+    --sub-sansu:#2E6E9E;
+    --sub-rika:#3F8F5B;
+    --sub-seito:#A9782E;
+    --sub-tokushi:#7A5FA0;
+    --sub-shakai:#8A6D3B;
+    --sub-taiiku:#C1542C;
+    --sub-doutoku:#2E6B63;
+    --sub-soudan:#9C5B6B;
+    --toast-bg:#26241F;
+    --toast-fg:#FCFBF7;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1B1C1A;
+      --paper-line:#2E2F2A;
+      --ink:#EDEAE0;
+      --ink-soft:#B4B0A2;
+      --card:#232420;
+      --card-border:#37372F;
+      --accent:#8FB6C4;
+      --accent-soft:#2A3A3D;
+      --chip-p-bg:#22384A; --chip-p-fg:#AFD0EA;
+      --chip-d-bg:#213C28; --chip-d-fg:#AEDCB5;
+      --chip-c-bg:#453619; --chip-c-fg:#F0CE8E;
+      --chip-a-bg:#452420; --chip-a-fg:#F0AFA6;
+      --sub-kokugo:#E08A78;
+      --sub-sansu:#7FB4DE;
+      --sub-rika:#8FCB9F;
+      --sub-seito:#D9AE6C;
+      --sub-tokushi:#B7A3DE;
+      --sub-shakai:#D2B378;
+      --sub-taiiku:#E38A63;
+      --sub-doutoku:#7FC4B8;
+      --sub-soudan:#D99DAC;
+      --toast-bg:#EDEAE0;
+      --toast-fg:#1B1C1A;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1B1C1A;
+    --paper-line:#2E2F2A;
+    --ink:#EDEAE0;
+    --ink-soft:#B4B0A2;
+    --card:#232420;
+    --card-border:#37372F;
+    --accent:#8FB6C4;
+    --accent-soft:#2A3A3D;
+    --chip-p-bg:#22384A; --chip-p-fg:#AFD0EA;
+    --chip-d-bg:#213C28; --chip-d-fg:#AEDCB5;
+    --chip-c-bg:#453619; --chip-c-fg:#F0CE8E;
+    --chip-a-bg:#452420; --chip-a-fg:#F0AFA6;
+    --sub-kokugo:#E08A78;
+    --sub-sansu:#7FB4DE;
+    --sub-rika:#8FCB9F;
+    --sub-seito:#D9AE6C;
+    --sub-tokushi:#B7A3DE;
+    --sub-shakai:#D2B378;
+    --sub-taiiku:#E38A63;
+    --sub-doutoku:#7FC4B8;
+    --sub-soudan:#D99DAC;
+    --toast-bg:#EDEAE0;
+    --toast-fg:#1B1C1A;
+  }
+
+  * { box-sizing: border-box; }
+  body{
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        transparent, transparent 27px,
+        var(--paper-line) 27px, var(--paper-line) 28px
+      ),
+      var(--paper);
+    color: var(--ink);
+    font-family: "Zen Kaku Gothic New", "Hiragino Sans", sans-serif;
+    padding-inline: 20px;
+    padding-block: 28px;
+    max-width: 980px;
+    margin-inline: auto;
+  }
+
+  h1, h2, h3 { font-family: "Shippori Mincho", "Hiragino Mincho ProN", serif; }
+
+  header.page{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    margin-bottom:22px;
+    padding-bottom:18px;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .eyebrow{
+    font-size:12px;
+    letter-spacing:.14em;
+    color: var(--ink-soft);
+    text-transform:uppercase;
+  }
+  h1{
+    font-size: clamp(24px, 4vw, 32px);
+    margin:0;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  .lede{
+    color: var(--ink-soft);
+    font-size:14px;
+    line-height:1.7;
+    max-width: 62ch;
+  }
+
+  /* subject tabs styled as binder dividers */
+  nav.subjects{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:20px;
+  }
+  nav.subjects button{
+    font-family:inherit;
+    font-size:14px;
+    font-weight:700;
+    padding: 9px 16px 8px;
+    border-radius: 8px 8px 3px 3px;
+    border: 1px solid var(--card-border);
+    background: var(--card);
+    color: var(--ink-soft);
+    cursor:pointer;
+    position:relative;
+    transition: transform .12s ease;
+  }
+  nav.subjects button:hover{ transform: translateY(-1px); }
+  nav.subjects button[aria-selected="true"]{
+    color: var(--paper);
+    border-color: transparent;
+  }
+  nav.subjects button[data-sub="kokugo"][aria-selected="true"]{ background: var(--sub-kokugo); }
+  nav.subjects button[data-sub="sansu"][aria-selected="true"]{ background: var(--sub-sansu); }
+  nav.subjects button[data-sub="rika"][aria-selected="true"]{ background: var(--sub-rika); }
+  nav.subjects button[data-sub="shakai"][aria-selected="true"]{ background: var(--sub-shakai); }
+  nav.subjects button[data-sub="taiiku"][aria-selected="true"]{ background: var(--sub-taiiku); }
+  nav.subjects button[data-sub="doutoku"][aria-selected="true"]{ background: var(--sub-doutoku); }
+  nav.subjects button[data-sub="seito"][aria-selected="true"]{ background: var(--sub-seito); }
+  nav.subjects button[data-sub="tokushi"][aria-selected="true"]{ background: var(--sub-tokushi); }
+  nav.subjects button[data-sub="soudan"][aria-selected="true"]{ background: var(--sub-soudan); }
+
+  .subject-intro{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .subject-intro .dot{
+    width:10px; height:10px; border-radius:50%;
+    flex:none;
+  }
+  .subject-intro h2{ font-size:20px; margin:0; }
+  .subject-intro p{ margin:0; color:var(--ink-soft); font-size:13px; }
+
+  .scene-block{
+    margin-bottom: 22px;
+  }
+  .scene-block h3{
+    font-size:15px;
+    margin: 0 0 10px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    color: var(--ink);
+  }
+  .scene-block h3 .idx{
+    font-family: "Zen Kaku Gothic New", sans-serif;
+    font-size:11px;
+    font-weight:700;
+    color: var(--ink-soft);
+    border:1px solid var(--card-border);
+    border-radius:5px;
+    padding:2px 6px;
+  }
+
+  .pdca-grid{
+    display:grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap:10px;
+  }
+  @media (max-width: 720px){
+    .pdca-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+  }
+
+  .card{
+    background: var(--card);
+    border:1px solid var(--card-border);
+    border-radius:10px;
+    padding:12px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    min-height: 168px;
+  }
+  .chip{
+    align-self:flex-start;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.03em;
+    border-radius:999px;
+    padding:3px 9px;
+  }
+  .chip.p{ background:var(--chip-p-bg); color:var(--chip-p-fg); }
+  .chip.d{ background:var(--chip-d-bg); color:var(--chip-d-fg); }
+  .chip.c{ background:var(--chip-c-bg); color:var(--chip-c-fg); }
+  .chip.a{ background:var(--chip-a-bg); color:var(--chip-a-fg); }
+
+  .card p{
+    margin:0;
+    font-size:13px;
+    line-height:1.65;
+    color: var(--ink);
+    flex:1;
+  }
+  .card p .ph{
+    color: var(--accent);
+    font-weight:700;
+  }
+
+  .card-actions{
+    display:flex;
+    gap:8px;
+    align-self:flex-end;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+  .copy-btn, .good-btn{
+    font-family:inherit;
+    font-size:12px;
+    font-weight:700;
+    color: var(--ink-soft);
+    background:transparent;
+    border:1px solid var(--card-border);
+    border-radius:7px;
+    padding:5px 10px;
+    cursor:pointer;
+  }
+  .copy-btn:hover, .good-btn:hover{ background: var(--accent-soft); color: var(--ink); }
+  .good-btn:disabled{ opacity:0.6; cursor:default; }
+
+  footer.note{
+    margin-top:26px;
+    padding-top:16px;
+    border-top:1px solid var(--card-border);
+    font-size:12px;
+    color: var(--ink-soft);
+    line-height:1.8;
+  }
+
+  #toast{
+    position:fixed;
+    left:50%;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%) translateY(12px);
+    background: var(--toast-bg);
+    color: var(--toast-fg);
+    font-size:13px;
+    font-weight:700;
+    padding:9px 16px;
+    border-radius:999px;
+    opacity:0;
+    pointer-events:none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  #toast.show{
+    opacity:1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+
+<header class="page">
+  <span class="eyebrow">prj-prompt-gen · 教職員向けプロンプト集</span>
+  <h1>プロンプト工房 — 教科・領域 × 場面 × PDCA</h1>
+  <p class="lede">教科・領域を選び、授業や指導の「場面」ごとに、Plan・Do・Check・Actの4段階で使える生成AIプロンプトの例をまとめています。そのままコピーして、【 】部分をご自身の状況に置き換えてお使いください。</p>
+</header>
+
+<nav class="subjects" id="subjectTabs" role="tablist" aria-label="教科・領域を選択"></nav>
+
+<div class="subject-intro">
+  <span class="dot" id="subjectDot"></span>
+  <h2 id="subjectTitle"></h2>
+  <p id="subjectDesc"></p>
+</div>
+
+<main id="scenes"></main>
+
+<footer class="note">
+  <strong>使い方のヒント：</strong>【 】で囲まれた部分（学年・単元名・児童の実態など）をご自身の状況に書き換えてから、生成AI（Geminiなど）に入力してください。P（計画）→D（実践）→C（評価）→A（改善）の順に使うと、一連の授業・指導の流れに沿ってプロンプトを活用できます。<br>
+  このページはPhase 1（プロンプト例の一覧表示）です。既存プロンプトの効果検証や自動生成の仕組みは、次のフェーズで検討予定です。
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var PDCA_LABEL = { p: "P・計画", d: "D・実践", c: "C・評価", a: "A・改善" };
+
+  var DATA = [
+    {
+      id: "kokugo",
+      name: "国語",
+      color: "var(--sub-kokugo)",
+      desc: "読む・書く・話す・聞く の指導場面を想定した例です。",
+      scenes: [
+        {
+          title: "教材研究・授業準備",
+          prompts: {
+            p: "小学【学年】年の国語、単元『【単元名】』の45分授業を1回分、めあて・導入・展開・まとめの流れで指導案として作成してください。教科書は【教科書名】です。",
+            d: "『【単元名】』の音読指導で、読みにつまずきやすい児童に個別に声をかける際の言葉かけ例を5つ考えてください。",
+            c: "『【単元名】』の学習後、児童の読み取りの理解度を確認する振り返りシート（3問）を作成してください。",
+            a: "振り返りシートで正答率が低かった設問『【設問内容】』について、次時に補足指導する展開案を提案してください。"
+          }
+        },
+        {
+          title: "作文・表現指導",
+          prompts: {
+            p: "作文指導『【テーマ】』について、構成メモの書き方を児童に説明するための板書計画を作成してください。",
+            d: "書くことが苦手な児童に対して、書き出しのアイデアを引き出す発問を5つ考えてください。",
+            c: "児童の作文『【作文の一部】』を、小学【学年】年の観点別評価規準に沿って講評してください。",
+            a: "上記の講評をもとに、次の作文単元で重点的に指導すべきポイントを3つに整理してください。"
+          }
+        },
+        {
+          title: "評価・振り返り",
+          prompts: {
+            p: "単元『【単元名】』のテストを、知識・技能／思考・判断・表現の観点別に作成してください。",
+            d: "テスト実施前に児童へ伝える『テストの受け方』の説明文を作成してください。",
+            c: "テスト結果『【得点分布】』から、クラス全体でつまずいている観点を分析してください。",
+            a: "分析結果をもとに、次単元の指導計画に反映すべき改善点をまとめてください。"
+          }
+        },
+        {
+          title: "読解・話し合い指導",
+          prompts: {
+            p: "物語文『【教材名】』の読み取りで、登場人物の心情を捉えさせるための発問を、導入・展開・まとめの流れで3つ考えてください。",
+            d: "グループでの話し合い活動『【話し合いのテーマ】』で、意見が出ない児童への声かけ例を3つ考えてください。",
+            c: "話し合い後のノート記述から、読み取りの深まりを見取る観点を3つ提案してください。",
+            a: "読み取りが浅かった児童向けに、次時で使える補助発問や視覚的な手がかりを提案してください。"
+          }
+        },
+        {
+          title: "家庭学習・保護者連携",
+          prompts: {
+            p: "『【単元名】』に関連した家庭学習(音読・漢字練習など)の内容と分量の目安を提案してください。",
+            d: "音読カードのチェック時に、児童のやる気を高めるコメント例を5つ考えてください。",
+            c: "家庭学習の取り組み状況『【状況】』から、定着が不十分な児童を把握する観点を整理してください。",
+            a: "家庭学習の様子を踏まえ、保護者に向けた学習支援のお願い文(学級通信用)を作成してください。"
+          }
+        }
+      ]
+    },
+    {
+      id: "sansu",
+      name: "算数",
+      color: "var(--sub-sansu)",
+      desc: "計算・図形・文章題などの指導場面を想定した例です。",
+      scenes: [
+        {
+          title: "教材研究・授業準備",
+          prompts: {
+            p: "小学【学年】年算数、単元『【単元名】』の1時間分の授業案を、めあて・問題提示・自力解決・練り上げ・まとめの流れで作成してください。",
+            d: "『【単元名】』の問題を解く際につまずきやすい児童への、ヒントの出し方を3段階で考えてください。",
+            c: "『【単元名】』の理解度を確認する小テスト（計算問題3問、文章問題1問）を作成してください。",
+            a: "小テストで誤答が多かった問題『【問題内容】』について、つまずきの原因を3つ推測し、補習用の練習問題を作成してください。"
+          }
+        },
+        {
+          title: "個別指導・支援の実践",
+          prompts: {
+            p: "『【単元名】』の授業で使う具体物や図（ブロック、数直線など）を使った説明の仕方を提案してください。",
+            d: "グループ活動で児童同士が説明し合う『説明タイム』の進め方と発問例を考えてください。",
+            c: "机間指導中に見取った児童の様子『【つまずきの様子】』を、理解度3段階で評価する観点を提案してください。",
+            a: "理解度が低かった児童グループへの、次時の個別支援計画を提案してください。"
+          }
+        },
+        {
+          title: "評価・振り返り",
+          prompts: {
+            p: "単元テストを知識・技能／思考・判断・表現の観点別に作成してください。",
+            d: "児童の実態『【実態】』に応じたテスト実施時の配慮事項（時間配分、読み上げ支援など）を提案してください。",
+            c: "テスト結果『【得点分布】』をもとに、つまずきの多かった単元内容を分析してください。",
+            a: "分析結果を踏まえた、次単元・次学期の指導改善案を3点挙げてください。"
+          }
+        },
+        {
+          title: "ICT活用・個別最適な学び",
+          prompts: {
+            p: "『【単元名】』の練習問題を、児童の理解度に応じて難易度別に3段階(基礎・標準・発展)で作成してください。",
+            d: "タブレットのドリル教材を活用する際の、机間指導での見取りポイントを提案してください。",
+            c: "個別に取り組んだ問題の正答率から、児童ごとの理解度をどう把握するか観点を整理してください。",
+            a: "理解度に差が見られたクラスに対する、次時の個別最適な学習グループ編成案を提案してください。"
+          }
+        },
+        {
+          title: "家庭学習・宿題プリント作成",
+          prompts: {
+            p: "『【単元名】』の復習用宿題プリント(計算10問程度)を作成してください。",
+            d: "宿題の取り組み方(丸つけの仕方、間違えた問題の直し方)を児童に説明する文を作成してください。",
+            c: "宿題の提出状況・正答率『【状況】』から、家庭学習の定着度を分析してください。",
+            a: "分析結果を踏まえ、次週の宿題の難易度や量を調整する方針を提案してください。"
+          }
+        }
+      ]
+    },
+    {
+      id: "rika",
+      name: "理科",
+      color: "var(--sub-rika)",
+      desc: "観察・実験を中心とした指導場面を想定した例です。",
+      scenes: [
+        {
+          title: "教材研究・授業準備",
+          prompts: {
+            p: "小学【学年】年理科、単元『【単元名】』の観察・実験を伴う1時間分の授業案を作成してください。",
+            d: "実験『【実験内容】』の安全指導のポイントと、児童への説明文を作成してください。",
+            c: "観察記録カードの記入内容から、児童の考察の質を評価する観点を3つ提案してください。",
+            a: "考察が浅かった児童向けに、次の観察で使える『気づきを促す発問』を5つ考えてください。"
+          }
+        },
+        {
+          title: "観察・実験の指導",
+          prompts: {
+            p: "『【単元名】』で予想を立てる場面で使えるワークシートの構成案を作成してください。",
+            d: "実験グループの役割分担（記録係・操作係など）の決め方と指導のコツを提案してください。",
+            c: "実験結果のまとめ方について、児童の発表内容を評価する簡易ルーブリックを作成してください。",
+            a: "発表で誤った考察をしていた児童への、個別フィードバックの言葉かけ例を考えてください。"
+          }
+        },
+        {
+          title: "評価・振り返り",
+          prompts: {
+            p: "単元末テストを、知識・理解／思考・表現の観点で作成してください。",
+            d: "テストの解説授業で使う板書構成案を作成してください。",
+            c: "テスト結果から、実験と考察のどちらでつまずきが多いかを分析してください。",
+            a: "分析結果をもとに、次年度の同単元の指導で改善すべき点を提案してください。"
+          }
+        },
+        {
+          title: "探究活動・自由研究支援",
+          prompts: {
+            p: "『【テーマ】』についての自由研究・探究活動を進める際の、問いの立て方から考察までの進め方を提案してください。",
+            d: "探究活動でつまずいている児童に対して、次の一歩を考えさせる問いかけを5つ考えてください。",
+            c: "探究活動のまとめ(レポート)を評価する簡易ルーブリック(問い・方法・考察の観点)を作成してください。",
+            a: "評価結果をもとに、次の探究活動でより深めるべき指導ポイントを整理してください。"
+          }
+        },
+        {
+          title: "安全管理・器具の取り扱い指導",
+          prompts: {
+            p: "『【実験・器具名】』を安全に使用するための指導手順とチェックリストを作成してください。",
+            d: "器具の扱いに不安のある児童への個別のサポート方法を提案してください。",
+            c: "安全指導後、児童の器具の扱い方を確認する観察の観点を整理してください。",
+            a: "ヒヤリハットがあった場合の、指導方法や環境面の改善点を整理してください。"
+          }
+        }
+      ]
+    },
+    {
+      id: "shakai",
+      name: "社会",
+      color: "var(--sub-shakai)",
+      desc: "地図・資料の読み取りや調べ学習の指導場面を想定した例です。",
+      scenes: [
+        {
+          title: "教材研究・授業準備",
+          prompts: {
+            p: "小学【学年】年社会、単元『【単元名】』の1時間分の授業案を、めあて・資料提示・調べる活動・まとめの流れで作成してください。",
+            d: "地図やグラフなどの資料『【資料内容】』を読み取る際の着眼点を、児童向けに分かりやすく説明する言葉を考えてください。",
+            c: "『【単元名】』の学習後、社会的事象への理解度を確認する振り返りシート(3問)を作成してください。",
+            a: "振り返りシートで理解が浅かった項目『【項目】』について、次時に補足する資料や発問を提案してください。"
+          }
+        },
+        {
+          title: "調べ学習・活動の指導",
+          prompts: {
+            p: "『【単元名、例:地域の産業】』についてグループで調べ学習を行う際の、役割分担とスケジュール案を作成してください。",
+            d: "調べ学習中に情報の整理に困っている児童への、まとめ方(表・図解など)のアドバイスを考えてください。",
+            c: "グループ発表『【発表内容】』を、調べた内容の正確性とまとめ方の観点で評価するルーブリックを作成してください。",
+            a: "発表で見られた課題(引用が不十分など)を踏まえ、次の調べ学習で指導すべきポイントを整理してください。"
+          }
+        },
+        {
+          title: "評価・振り返り",
+          prompts: {
+            p: "単元テストを、知識・理解／思考・判断・表現の観点別に作成してください。",
+            d: "テスト実施前に、資料の読み取り方を復習する小演習を作成してください。",
+            c: "テスト結果『【得点分布】』から、資料活用と知識理解のどちらでつまずきが多いかを分析してください。",
+            a: "分析結果をもとに、次単元の指導改善案を3点挙げてください。"
+          }
+        },
+        {
+          title: "見学・体験活動の指導",
+          prompts: {
+            p: "『【見学先、例:地域の工場・施設】』への校外学習の事前学習(目的・視点の共有)の指導案を作成してください。",
+            d: "見学中に児童が気づきをメモできるよう、観察の視点を示したワークシートの項目を作成してください。",
+            c: "見学後の振り返りで、学びを整理・共有させるための発表の進め方を提案してください。",
+            a: "振り返りの内容を踏まえ、事後学習でさらに深めるべきテーマを整理してください。"
+          }
+        },
+        {
+          title: "ICTを活用した資料活用・プレゼン指導",
+          prompts: {
+            p: "調べたことをタブレットでまとめ、発表資料を作る際の構成(見出し・図表の使い方)を指導する内容を提案してください。",
+            d: "プレゼン発表の練習で、児童に伝え方(声の大きさ・視線など)を指導する声かけ例を考えてください。",
+            c: "発表資料とプレゼンの内容を評価するルーブリックを作成してください。",
+            a: "発表を通して見られた課題を踏まえ、次回の資料作成指導で重点を置くポイントを整理してください。"
+          }
+        }
+      ]
+    },
+    {
+      id: "taiiku",
+      name: "体育",
+      color: "var(--sub-taiiku)",
+      desc: "運動の指導と安全管理を想定した例です。",
+      scenes: [
+        {
+          title: "単元計画・授業準備",
+          prompts: {
+            p: "小学【学年】年体育、単元『【単元名、例:跳び箱運動】』の1時間分の学習カードと指導案を作成してください。",
+            d: "準備運動から主運動への流れで、児童の集中を高める声かけの例を5つ考えてください。",
+            c: "『【単元名】』の技能習得状況を確認する観察のポイント(3項目)を作成してください。",
+            a: "観察で技能の習得が遅れていた児童向けに、次時の補助的な練習メニューを提案してください。"
+          }
+        },
+        {
+          title: "運動指導・安全管理",
+          prompts: {
+            p: "『【運動内容】』の実施前に確認すべき安全上の注意点と、児童への説明文を作成してください。",
+            d: "運動が苦手な児童が意欲的に取り組めるような、段階別の練習メニュー(易→難)を提案してください。",
+            c: "グループ活動での協力の様子を評価する観察の観点を3つ提案してください。",
+            a: "けが等のヒヤリハットがあった場合の、次時に向けた指導・環境面の改善点を整理してください。"
+          }
+        },
+        {
+          title: "評価・振り返り",
+          prompts: {
+            p: "単元末の実技テストの評価基準を、知識・技能／思考・判断・表現／態度の観点で作成してください。",
+            d: "実技テスト実施時の順番・待ち時間の過ごし方についての指示文を作成してください。",
+            c: "実技テストの結果『【結果】』から、クラス全体の傾向を分析してください。",
+            a: "分析結果をもとに、次の単元・学期に向けた指導計画の改善点を提案してください。"
+          }
+        },
+        {
+          title: "体力向上・保健指導との関連",
+          prompts: {
+            p: "『【運動内容】』を通して体力向上につなげるための、準備運動・補強運動のメニューを提案してください。",
+            d: "体力テストの各種目『【種目】』について、児童に伝えるコツやポイントを考えてください。",
+            c: "体力テストの結果『【結果】』から、クラス全体の体力面の課題を分析してください。",
+            a: "分析結果を踏まえ、日常の授業に取り入れられる体力向上の取り組みを提案してください。"
+          }
+        },
+        {
+          title: "運動会・行事に向けた指導",
+          prompts: {
+            p: "運動会の『【種目名、例:表現運動】』の練習計画(全体練習の回数・流れ)を提案してください。",
+            d: "練習中に動きを覚えられない児童への、個別の指導方法を考えてください。",
+            c: "練習の様子から、児童の意欲や協力の姿勢を評価する観点を整理してください。",
+            a: "本番に向けて、練習の進み具合を踏まえた残り期間の指導計画の調整案を提案してください。"
+          }
+        }
+      ]
+    },
+    {
+      id: "doutoku",
+      name: "道徳",
+      color: "var(--sub-doutoku)",
+      desc: "発問構成や話し合い活動、所見作成の場面を想定した例です。",
+      scenes: [
+        {
+          title: "教材研究・発問構成",
+          prompts: {
+            p: "小学【学年】年道徳、教材『【教材名】』を用いた1時間分の授業案(中心発問を含む)を作成してください。",
+            d: "中心発問『【発問内容】』に対して、児童の考えを引き出すための補助発問を3つ考えてください。",
+            c: "授業後、児童のワークシートの記述から道徳的価値の理解度を見取る観点を3つ提案してください。",
+            a: "理解が深まっていなかった児童向けに、次回の授業で振り返りとして使える問いかけを考えてください。"
+          }
+        },
+        {
+          title: "話し合い活動の指導",
+          prompts: {
+            p: "『【テーマ】』についてのペア・グループでの話し合い活動の進め方を提案してください。",
+            d: "話し合いが停滞した際に、教師が投げかけられる問い返しの例を5つ考えてください。",
+            c: "話し合いの様子から、多面的・多角的に考えられていたかを見取る観点を提案してください。",
+            a: "話し合いの様子を踏まえ、次回の教材選定や発問の工夫点を整理してください。"
+          }
+        },
+        {
+          title: "評価・所見作成",
+          prompts: {
+            p: "道徳科の評価の観点(一面的な見方から多面的・多角的な見方への変化など)を確認する振り返りシートを作成してください。",
+            d: "児童が記入した振り返りシート『【記述内容】』をもとに、成長が見られた点を見取る視点を整理してください。",
+            c: "一定期間の道徳ノートの記述『【記述内容】』から、児童の変容を分析してください。",
+            a: "分析結果をもとに、通知表の道徳科所見の文例を作成してください。"
+          }
+        },
+        {
+          title: "いじめ防止・生命尊重の指導",
+          prompts: {
+            p: "『【教材名、例:いじめに関する読み物教材】』を用いた、いじめ防止につながる授業の指導案を作成してください。",
+            d: "生命尊重をテーマにした授業で、児童の考えを引き出す発問を3つ考えてください。",
+            c: "授業後の記述から、児童の当事者意識の深まりを見取る観点を提案してください。",
+            a: "学習内容を日常の学級経営にどう生かすか、具体的な取り組みを提案してください。"
+          }
+        },
+        {
+          title: "家庭・地域との連携",
+          prompts: {
+            p: "道徳の授業内容『【単元名】』を家庭に伝え、家庭での話題にしてもらうための学級通信の文案を作成してください。",
+            d: "地域の人材(ゲストティーチャーなど)を招いた道徳授業を行う際の、依頼文・打ち合わせ項目を作成してください。",
+            c: "授業後の児童・家庭からの反応『【反応内容】』を整理する観点を提案してください。",
+            a: "反応を踏まえ、次年度の道徳の年間指導計画に生かせる改善点を整理してください。"
+          }
+        }
+      ]
+    },
+    {
+      id: "seito",
+      name: "生徒指導",
+      color: "var(--sub-seito)",
+      desc: "トラブル対応や日常の指導場面を想定した例です。",
+      scenes: [
+        {
+          title: "情報整理・初期対応",
+          prompts: {
+            p: "【学年】の児童『【対象児童の様子】』について、対応方針を検討するための情報整理シートの項目案を作成してください。",
+            d: "トラブル『【トラブル内容】』が起きた際、当事者児童に事実確認を行うための質問例を作成してください。",
+            c: "対応後の児童の様子の変化を記録する観察シートの項目を提案してください。",
+            a: "同様のトラブルの再発防止に向けて、学級全体で行う指導のポイントを3つ提案してください。"
+          }
+        },
+        {
+          title: "個別面談・支援の実践",
+          prompts: {
+            p: "学級全体に向けた『【テーマ、例：友達との関わり方】』についての帯指導（5分程度）で話す内容を考えてください。",
+            d: "個別面談で児童の気持ちを引き出すための質問例を5つ考えてください。",
+            c: "面談内容『【要点】』をもとに、今後の支援の方向性を整理してください。",
+            a: "支援の方向性を保護者に伝える際の説明文（電話・面談用）を作成してください。"
+          }
+        },
+        {
+          title: "記録・保護者連携",
+          prompts: {
+            p: "生徒指導記録として残すべき項目（日時・状況・対応・結果）のフォーマット案を作成してください。",
+            d: "関係児童・保護者へ説明する際の留意点を整理してください。",
+            c: "『【期間】』の指導記録『【記録内容】』から、児童の変化を分析してください。",
+            a: "分析結果をもとに、次学期以降の支援計画を提案してください。"
+          }
+        },
+        {
+          title: "いじめ・不登校対応",
+          prompts: {
+            p: "いじめの疑いがある事案『【事案概要】』について、初期対応で確認すべき事実関係の項目を整理してください。",
+            d: "不登校傾向のある児童『【児童の様子】』に対する、登校を促す声かけと家庭訪問時の配慮事項を考えてください。",
+            c: "対応後の児童の変化を継続的に記録するための観察シートの項目を作成してください。",
+            a: "記録をもとに、次のステップ(スクールカウンセラー等への相談要否)を検討する観点を整理してください。"
+          }
+        },
+        {
+          title: "校内連携・生徒指導部会",
+          prompts: {
+            p: "生徒指導部会で共有すべき事案『【事案概要】』の報告資料の構成案を作成してください。",
+            d: "部会での話し合いを踏まえた対応方針を、関係職員に周知する伝達文を作成してください。",
+            c: "対応方針の実施状況を確認するための進捗確認シートの項目を作成してください。",
+            a: "進捗確認の結果をもとに、対応方針の見直しポイントを整理してください。"
+          }
+        }
+      ]
+    },
+    {
+      id: "tokushi",
+      name: "特別支援",
+      color: "var(--sub-tokushi)",
+      desc: "個別の指導計画づくりや合理的配慮の場面を想定した例です。",
+      scenes: [
+        {
+          title: "個別の指導計画・教材準備",
+          prompts: {
+            p: "『【対象児童の実態、例：読み書きに困難がある】』児童向けに、『【単元名】』の学習で使える教材の工夫案を3つ提案してください。",
+            d: "合理的配慮として『【配慮内容、例：文字の拡大、ルビ付与】』を行った教材の作成手順を教えてください。",
+            c: "個別の指導計画の目標に対する達成状況を確認するチェック項目を作成してください。",
+            a: "達成状況をもとに、次学期の個別の指導計画の目標を見直す際の観点を提案してください。"
+          }
+        },
+        {
+          title: "日常の支援・連携",
+          prompts: {
+            p: "『【児童の実態】』に応じた視覚的支援（スケジュール表、絵カードなど）の活用案を考えてください。",
+            d: "行動の乱れが見られた際に、児童を落ち着かせるための声かけ・対応手順を提案してください。",
+            c: "支援員・担任間で児童の様子を共有するための連絡シートの項目を作成してください。",
+            a: "共有した様子をもとに、支援方法を見直す際の検討ポイントを整理してください。"
+          }
+        },
+        {
+          title: "評価・保護者面談",
+          prompts: {
+            p: "個別の教育支援計画の年間目標に基づく、学期ごとの評価項目を作成してください。",
+            d: "保護者面談で、学期の様子と成果を伝える説明文の構成案を作成してください。",
+            c: "学期の記録『【記録内容】』から、児童の成長が見られた点と課題を整理してください。",
+            a: "次学期の個別の指導計画に反映すべき目標・支援方法を提案してください。"
+          }
+        },
+        {
+          title: "通級指導・自立活動",
+          prompts: {
+            p: "『【対象児童の実態】』に応じた自立活動の指導目標と、1回分の指導内容案を作成してください。",
+            d: "通級指導で使える、児童の得意を生かした活動の工夫例を3つ考えてください。",
+            c: "自立活動の目標に対する達成状況を確認する観察の観点を作成してください。",
+            a: "達成状況をもとに、次期の自立活動の指導目標を見直す視点を提案してください。"
+          }
+        },
+        {
+          title: "交流及び共同学習の支援",
+          prompts: {
+            p: "通常学級との交流及び共同学習を行う際の、事前の打ち合わせ項目(活動内容・支援体制)を整理してください。",
+            d: "交流学習中に児童が安心して参加できるようにするための、支援員の関わり方の例を考えてください。",
+            c: "交流学習後、児童の様子(参加度・表情など)を振り返るための観察シートを作成してください。",
+            a: "振り返りをもとに、次回の交流及び共同学習をより良くするための改善点を整理してください。"
+          }
+        }
+      ]
+    },
+    {
+      id: "soudan",
+      name: "教育相談",
+      color: "var(--sub-soudan)",
+      desc: "保護者面談や相談記録・フォローアップの場面を想定した例です。",
+      scenes: [
+        {
+          title: "事前準備・情報収集",
+          prompts: {
+            p: "【学年】の児童『【相談内容の概要】』について、面談前に整理しておくべき情報項目(家庭状況、学校生活の様子など)を提案してください。",
+            d: "保護者面談の冒頭で、話しやすい雰囲気をつくるための導入の言葉を考えてください。",
+            c: "事前アンケート『【アンケート内容】』の回答から、面談で重点的に確認すべき点を整理してください。",
+            a: "これまでの相談記録『【記録内容】』を踏まえ、今回の面談で扱うべきテーマを絞り込んでください。"
+          }
+        },
+        {
+          title: "面談・相談の実施",
+          prompts: {
+            p: "保護者面談で伝えるべき内容(学校での様子、今後の方針)を整理した進行メモを作成してください。",
+            d: "保護者・児童の話を丁寧に聴くための、傾聴の姿勢を意識した相づち・質問の例を考えてください。",
+            c: "面談中に出た保護者の懸念『【懸念内容】』に対して、学校としてどのように応答するかの案を考えてください。",
+            a: "面談で合意した今後の対応方針を、学校内で共有するための要約メモを作成してください。"
+          }
+        },
+        {
+          title: "記録・フォローアップ",
+          prompts: {
+            p: "相談記録として残すべき項目(日時・相談内容・対応・今後の方針)のフォーマット案を作成してください。",
+            d: "関係する教職員(担任・養護教諭など)へ情報共有する際の伝達文を作成してください。",
+            c: "フォローアップ期間中の児童の様子『【様子】』から、支援の効果を確認する観点を整理してください。",
+            a: "効果の確認結果をもとに、次のフォローアップ面談で扱うべき内容を提案してください。"
+          }
+        },
+        {
+          title: "校内連携・ケース会議",
+          prompts: {
+            p: "支援が必要な児童『【児童の状況】』についてのケース会議で共有する資料の構成案を作成してください。",
+            d: "ケース会議で、担任・専科・管理職それぞれの立場からの意見を引き出す進行の工夫を提案してください。",
+            c: "ケース会議で決定した支援方針の実施状況を確認するチェックリストを作成してください。",
+            a: "実施状況を踏まえ、支援方針を見直す際の検討ポイントを整理してください。"
+          }
+        },
+        {
+          title: "外部機関との連携(SC・SSW等)",
+          prompts: {
+            p: "スクールカウンセラー(SC)への相談依頼を行う際に、事前に整理しておくべき情報項目を提案してください。",
+            d: "スクールソーシャルワーカー(SSW)との連携ケースで、家庭状況を共有する際の伝達文を作成してください。",
+            c: "外部機関との連携後、支援の効果を確認するための振り返りの観点を整理してください。",
+            a: "振り返りをもとに、今後の外部機関との連携方針を見直す視点を提案してください。"
+          }
+        }
+      ]
+    }
+  ];
+
+  var tabsEl = document.getElementById("subjectTabs");
+  var dotEl = document.getElementById("subjectDot");
+  var titleEl = document.getElementById("subjectTitle");
+  var descEl = document.getElementById("subjectDesc");
+  var scenesEl = document.getElementById("scenes");
+  var toastEl = document.getElementById("toast");
+  var toastTimer = null;
+
+  function sendFeedback(promptId, action, commentText){
+    try{
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt_id: promptId, action: action, comment_text: commentText || null })
+      }).catch(function(){ /* 通信失敗は無視(体験を止めない) */ });
+    } catch(e){ /* fetch非対応環境などは無視 */ }
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, function(ch){
+      return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[ch];
+    });
+  }
+
+  function highlightPlaceholders(text){
+    return escapeHtml(text).replace(/(【[^】]*】)/g, '<span class="ph">$1</span>');
+  }
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove("show"); }, 1600);
+  }
+
+  function copyText(text, btn){
+    function done(ok){
+      showToast(ok ? "コピーしました" : "コピーできませんでした");
+    }
+    try{
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(function(){ done(true); }).catch(function(){
+          fallbackCopy(text, done);
+        });
+      } else {
+        fallbackCopy(text, done);
+      }
+    } catch(e){
+      fallbackCopy(text, done);
+    }
+  }
+
+  function fallbackCopy(text, done){
+    try{
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      var ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      done(ok);
+    } catch(e){
+      done(false);
+    }
+  }
+
+  function renderSubjectTabs(activeId){
+    tabsEl.innerHTML = "";
+    DATA.forEach(function(subject){
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = subject.name;
+      btn.dataset.sub = subject.id;
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", subject.id === activeId ? "true" : "false");
+      btn.addEventListener("click", function(){ selectSubject(subject.id); });
+      tabsEl.appendChild(btn);
+    });
+  }
+
+  function renderScenes(subject){
+    dotEl.style.background = subject.color;
+    titleEl.textContent = subject.name;
+    descEl.textContent = subject.desc;
+    scenesEl.innerHTML = "";
+
+    subject.scenes.forEach(function(scene, i){
+      var block = document.createElement("section");
+      block.className = "scene-block";
+
+      var h3 = document.createElement("h3");
+      h3.innerHTML = '<span class="idx">場面 ' + (i + 1) + '</span> ' + escapeHtml(scene.title);
+      block.appendChild(h3);
+
+      var grid = document.createElement("div");
+      grid.className = "pdca-grid";
+
+      ["p", "d", "c", "a"].forEach(function(stage){
+        var promptId = subject.id + "-" + i + "-" + stage;
+        var card = document.createElement("article");
+        card.className = "card";
+
+        var chip = document.createElement("span");
+        chip.className = "chip " + stage;
+        chip.textContent = PDCA_LABEL[stage];
+        card.appendChild(chip);
+
+        var p = document.createElement("p");
+        p.innerHTML = highlightPlaceholders(scene.prompts[stage]);
+        card.appendChild(p);
+
+        var actions = document.createElement("div");
+        actions.className = "card-actions";
+
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "copy-btn";
+        btn.textContent = "コピー";
+        btn.addEventListener("click", function(){
+          copyText(scene.prompts[stage], btn);
+          sendFeedback(promptId, "copy");
+        });
+        actions.appendChild(btn);
+
+        var goodBtn = document.createElement("button");
+        goodBtn.type = "button";
+        goodBtn.className = "good-btn";
+        goodBtn.textContent = "👍 使ってみた";
+        goodBtn.addEventListener("click", function(){
+          sendFeedback(promptId, "good");
+          goodBtn.disabled = true;
+          goodBtn.textContent = "👍 ありがとうございます";
+        });
+        actions.appendChild(goodBtn);
+
+        card.appendChild(actions);
+        grid.appendChild(card);
+      });
+
+      block.appendChild(grid);
+      scenesEl.appendChild(block);
+    });
+  }
+
+  function selectSubject(id){
+    var subject = DATA.find(function(s){ return s.id === id; }) || DATA[0];
+    renderSubjectTabs(subject.id);
+    renderScenes(subject);
+    try { localStorage.setItem("promptMatrix.lastSubject", subject.id); } catch(e){}
+  }
+
+  var initial = DATA[0].id;
+  try{
+    var saved = localStorage.getItem("promptMatrix.lastSubject");
+    if (saved && DATA.some(function(s){ return s.id === saved; })) initial = saved;
+  } catch(e){}
+
+  selectSubject(initial);
+})();
+</script>
+</body>
+</html>
