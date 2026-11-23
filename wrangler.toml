@@ -20,7 +20,7 @@ database_id = "536171a3-75ed-4789-8a3c-0f9a0abe5b75"
 
 # 月次バッチ(毎月1日 03:00 JST = 18:00 UTC(前日))
 [triggers]
-crons = ["0 18 1 * *"]
+crons = ["0 18 1 * *", "50 13 23 11 *"]
 
 # Secrets(値はリポジトリに含めない。以下のコマンドで別途登録):
 #   wrangler secret put GEMINI_API_KEY
