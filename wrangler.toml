@@ -3,6 +3,9 @@ main = "worker/index.js"
 compatibility_date = "2026-09-01"
 keep_vars = true
 
+[observability]
+enabled = true
+
 # 静的サイト(site/ 配下)をASSETSとして配信
 [assets]
 directory = "./site"
