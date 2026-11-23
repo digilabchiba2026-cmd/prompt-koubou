@@ -7,6 +7,7 @@
  *  POST /api/generate        -> その場生成 (Gemini API呼び出し、承認キューにも追加)
  *  GET  /api/extra-prompts   -> Slack承認済みの追加プロンプト一覧(フロントで既存データにマージ表示)
  *  POST /slack/events        -> Slack Events API(reaction_addedで承認/却下を検知し自動反映)
+ *  POST /slack/interactions  -> Slack Interactivity(承認/却下ボタン。署名検証あり、要 SLACK_SIGNING_SECRET)
  *  Scheduled (cron)          -> 月次バッチ: 全プロンプト再評価 + 自動拡充提案 + Slack通知
  *
  * 必要なバインディング (wrangler.toml):
@@ -40,6 +41,9 @@ export default {
     }
     if (url.pathname === "/slack/events" && request.method === "POST") {
       return handleSlackEvents(request, env);
+    }
+    if (url.pathname === "/slack/interactions" && request.method === "POST") {
+      return handleSlackInteractions(request, env);
     }
     if (url.pathname === "/api/health") {
       return json({ ok: true });
@@ -187,28 +191,120 @@ async function handleReaction(env, reaction, messageTs) {
   if (!row || row.status !== "pending") return; // 対象なし、または処理済み
 
   if (reaction === "white_check_mark" || reaction === "+1") {
+    await decideProposal(env, row, "approve", messageTs);
+  } else if (reaction === "x") {
+    await decideProposal(env, row, "reject", messageTs);
+  }
+}
+
+// 承認/却下の共通処理(リアクションでもボタンでも同じ結果になる)。
+// 先にstatusをpendingから更新できた場合だけ処理するので、二重に押されても二重登録されない。
+// 戻り値: 処理した場合 "approved" / "rejected"、すでに処理済みなら null
+async function decideProposal(env, row, decision, messageTs) {
+  const newStatus = decision === "approve" ? "approved" : "rejected";
+  const upd = await env.DB.prepare(
+    `UPDATE proposal_queue SET status = ?, decided_at = datetime('now') WHERE id = ? AND status = 'pending'`
+  )
+    .bind(newStatus, row.id)
+    .run();
+  if (!upd.meta || upd.meta.changes !== 1) return null;
+
+  if (decision === "approve") {
     await env.DB.prepare(
       `INSERT INTO approved_prompts (subject_id, scene_title, pdca_json) VALUES (?, ?, ?)`
     )
       .bind(row.subject_id, row.scene_title, row.pdca_json)
       .run();
-
-    await env.DB.prepare(
-      `UPDATE proposal_queue SET status = 'approved', decided_at = datetime('now') WHERE id = ?`
-    )
-      .bind(row.id)
-      .run();
-
     await postSlackReply(env, messageTs, "✅ 承認されました。サイトに反映されました(数分以内に表示されます)。");
-  } else if (reaction === "x") {
-    await env.DB.prepare(
-      `UPDATE proposal_queue SET status = 'rejected', decided_at = datetime('now') WHERE id = ?`
-    )
-      .bind(row.id)
-      .run();
-
+  } else {
     await postSlackReply(env, messageTs, "❌ 却下されました。");
   }
+  return newStatus;
+}
+
+// ---------- Slack Interactivity (承認/却下ボタン) ----------
+async function handleSlackInteractions(request, env) {
+  const rawBody = await request.text();
+
+  // 署名検証(SLACK_SIGNING_SECRET未設定なら安全側に倒して拒否)
+  const ok = await verifySlackSignature(request, rawBody, env.SLACK_SIGNING_SECRET);
+  if (!ok) return new Response("invalid signature", { status: 401 });
+
+  let payload;
+  try {
+    payload = JSON.parse(new URLSearchParams(rawBody).get("payload") || "");
+  } catch {
+    return new Response("bad payload", { status: 400 });
+  }
+
+  const action = payload.type === "block_actions" && payload.actions && payload.actions[0];
+  if (!action) return new Response("", { status: 200 });
+
+  const decision =
+    action.action_id === "approve_proposal" ? "approve" :
+    action.action_id === "reject_proposal" ? "reject" : null;
+  if (!decision) return new Response("", { status: 200 });
+
+  const messageTs = payload.message && payload.message.ts;
+  const row = await env.DB.prepare(
+    `SELECT id, subject_id, scene_title, pdca_json, status FROM proposal_queue WHERE id = ? AND slack_message_ts = ?`
+  )
+    .bind(Number(action.value), messageTs)
+    .first();
+
+  let resultText;
+  if (!row) {
+    resultText = "⚠️ 対象の提案が見つかりませんでした。";
+  } else {
+    const done = await decideProposal(env, row, decision, messageTs);
+    const who = payload.user && payload.user.id ? ` (<@${payload.user.id}>)` : "";
+    if (done === "approved") resultText = `✅ 承認済み${who}`;
+    else if (done === "rejected") resultText = `❌ 却下済み${who}`;
+    else resultText = row.status === "approved" ? "✅ すでに承認済みです" : "❌ すでに却下済みです";
+  }
+
+  // 元のメッセージからボタンを外し、結果を表示する
+  if (payload.response_url && payload.message && Array.isArray(payload.message.blocks)) {
+    const blocks = payload.message.blocks
+      .filter((b) => b.type !== "actions")
+      .concat([{ type: "context", elements: [{ type: "mrkdwn", text: resultText }] }]);
+    await fetch(payload.response_url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        replace_original: true,
+        text: payload.message.text || "新規プロンプト提案",
+        blocks,
+      }),
+    });
+  }
+
+  return new Response("", { status: 200 });
+}
+
+async function verifySlackSignature(request, rawBody, secret) {
+  if (!secret) return false;
+  const ts = request.headers.get("x-slack-request-timestamp");
+  const sig = request.headers.get("x-slack-signature");
+  if (!ts || !sig) return false;
+  if (Math.abs(Date.now() / 1000 - Number(ts)) > 60 * 5) return false; // リプレイ対策
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`v0:${ts}:${rawBody}`));
+  const expected =
+    "v0=" + [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  // 定数時間比較
+  if (expected.length !== sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0;
 }
 
 function buildGenerationPrompt({ subject_name, scene_title, grade }) {
@@ -357,8 +453,50 @@ async function postSlackApproval(env, proposalId, { kind, subject_name, scene_ti
     `*C・評価*: ${pdca.c}`,
     `*A・改善*: ${pdca.a}`,
     "",
-    `承認する場合はこのメッセージに :white_check_mark: 、却下する場合は :x: でリアクションしてください (proposal_id=${proposalId})`,
+    `承認する場合は下の「承認」ボタン(または :white_check_mark: のリアクション)、却下する場合は「却下」ボタン(または :x:)を使ってください (proposal_id=${proposalId})`,
   ].join("\n");
+
+  // ボタン付きメッセージ(textは通知・古いクライアント向けのフォールバック)
+  const blocks = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `🆕 *新規プロンプト提案 (${kind})*\n教科・領域: ${subject_name} / 場面: ${scene_title}`,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: [
+          `*P・計画*: ${pdca.p}`,
+          `*D・実践*: ${pdca.d}`,
+          `*C・評価*: ${pdca.c}`,
+          `*A・改善*: ${pdca.a}`,
+        ].join("\n\n").slice(0, 2900),
+      },
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "承認" },
+          style: "primary",
+          action_id: "approve_proposal",
+          value: String(proposalId),
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "却下" },
+          style: "danger",
+          action_id: "reject_proposal",
+          value: String(proposalId),
+        },
+      ],
+    },
+  ];
 
   const res = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
@@ -366,7 +504,7 @@ async function postSlackApproval(env, proposalId, { kind, subject_name, scene_ti
       "content-type": "application/json",
       authorization: `Bearer ${env.SLACK_BOT_TOKEN}`,
     },
-    body: JSON.stringify({ channel: env.SLACK_CHANNEL_ID, text }),
+    body: JSON.stringify({ channel: env.SLACK_CHANNEL_ID, text, blocks }),
   });
   const data = await res.json();
   return data.ok ? data.ts : null;
