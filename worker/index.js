@@ -244,53 +244,80 @@ async function callGemini(apiKey, promptText) {
 }
 
 // ---------- 月次バッチ: 自動評価 + 自動拡充提案 ----------
+// 制約への配慮:
+//  - 1場面(P/D/C/Aの4プロンプト)を1回のGemini呼び出しで評価する(外部通信は全45回程度)
+//  - Gemini無料枠の速度制限(毎分10回程度)に合わせ、呼び出し間に待機を入れる
+//  - D1への書き込みは最後に1回のbatchでまとめる
+const BATCH_WAIT_MS = 6500;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function runMonthlyBatch(env) {
   const promptsRes = await env.ASSETS.fetch(
     new Request("https://internal/data/prompts.json")
   );
+  if (!promptsRes.ok) {
+    await env.DB.prepare(
+      `INSERT INTO evaluation_runs (prompts_evaluated, status) VALUES (0, 'failed')`
+    ).run();
+    console.error("prompts.json not found", promptsRes.status);
+    return;
+  }
   const subjects = await promptsRes.json();
 
+  const stmts = [];
   let evaluated = 0;
+  let attempted = 0;
+  let first = true;
+
   for (const subject of subjects) {
     for (let i = 0; i < subject.scenes.length; i++) {
       const scene = subject.scenes[i];
-      for (const key of ["p", "d", "c", "a"]) {
-        const promptId = `${subject.id}-${i}-${key}`;
-        const text = scene.prompts[key];
-        try {
-          const score = await evaluatePrompt(env.GEMINI_API_KEY, text);
-          await env.DB.prepare(
-            `INSERT INTO prompt_scores (prompt_id, clarity_score, specificity_score, versatility_score, safety_score, reasoning, evaluated_at)
-             VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-             ON CONFLICT(prompt_id) DO UPDATE SET
-               clarity_score=excluded.clarity_score,
-               specificity_score=excluded.specificity_score,
-               versatility_score=excluded.versatility_score,
-               safety_score=excluded.safety_score,
-               reasoning=excluded.reasoning,
-               evaluated_at=excluded.evaluated_at`
-          )
-            .bind(
-              promptId,
-              score.clarity,
-              score.specificity,
-              score.versatility,
-              score.safety,
-              score.reasoning
+      attempted += 4;
+      if (!first) await sleep(BATCH_WAIT_MS);
+      first = false;
+
+      try {
+        const scores = await evaluateScene(env.GEMINI_API_KEY, scene);
+        for (const key of ["p", "d", "c", "a"]) {
+          const sc = scores[key];
+          if (!sc) continue;
+          stmts.push(
+            env.DB.prepare(
+              `INSERT INTO prompt_scores (prompt_id, clarity_score, specificity_score, versatility_score, safety_score, reasoning, evaluated_at)
+               VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+               ON CONFLICT(prompt_id) DO UPDATE SET
+                 clarity_score=excluded.clarity_score,
+                 specificity_score=excluded.specificity_score,
+                 versatility_score=excluded.versatility_score,
+                 safety_score=excluded.safety_score,
+                 reasoning=excluded.reasoning,
+                 evaluated_at=excluded.evaluated_at`
+            ).bind(
+              `${subject.id}-${i}-${key}`,
+              sc.clarity,
+              sc.specificity,
+              sc.versatility,
+              sc.safety,
+              sc.reasoning
             )
-            .run();
+          );
           evaluated++;
-        } catch (err) {
-          console.error("evaluate failed", promptId, err);
         }
+      } catch (err) {
+        console.error("evaluate failed", subject.id, i, String(err));
       }
     }
   }
 
+  if (stmts.length > 0) {
+    await env.DB.batch(stmts);
+  }
+
+  const status = evaluated === 0 ? "failed" : evaluated < attempted ? "partial" : "success";
   await env.DB.prepare(
-    `INSERT INTO evaluation_runs (prompts_evaluated, status) VALUES (?, 'success')`
+    `INSERT INTO evaluation_runs (prompts_evaluated, status) VALUES (?, ?)`
   )
-    .bind(evaluated)
+    .bind(evaluated, status)
     .run();
 
   // 低評価プロンプトの一覧をSlackに通知(改善のトリガー)
@@ -307,12 +334,15 @@ async function runMonthlyBatch(env) {
   // TODO: 自動拡充提案(未収録の場面の検出)は別関数 suggestNewScenes() として次段階で実装
 }
 
-async function evaluatePrompt(apiKey, promptText) {
-  const evalPrompt = `以下のプロンプトを4つの観点(明確さ・具体性・汎用性・安全性)で1〜10点で採点し、
-JSON形式のみで返してください: {"clarity": 数値, "specificity": 数値, "versatility": 数値, "safety": 数値, "reasoning": "短い理由"}
+async function evaluateScene(apiKey, scene) {
+  const evalPrompt = `以下は、ある場面で使うPDCA4段階のプロンプトです。それぞれを4つの観点(明確さ・具体性・汎用性・安全性)で1〜10点で採点し、
+JSON形式のみで返してください:
+{"p": {"clarity": 数値, "specificity": 数値, "versatility": 数値, "safety": 数値, "reasoning": "短い理由"}, "d": {...}, "c": {...}, "a": {...}}
 
-評価対象:
-${promptText}`;
+P・計画: ${scene.prompts.p}
+D・実践: ${scene.prompts.d}
+C・評価: ${scene.prompts.c}
+A・改善: ${scene.prompts.a}`;
   return callGemini(apiKey, evalPrompt);
 }
 
