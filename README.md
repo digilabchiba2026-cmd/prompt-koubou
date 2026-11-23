@@ -42,13 +42,15 @@ wrangler secret put SLACK_CHANNEL_ID    # #prj-prompt-gen のチャンネルID (
 ### 5. デプロイ
 main ブランチにpushすると自動デプロイされます。手動実行する場合は `wrangler deploy`。
 
-## 実装済み機能 (Phase 2 Step 2)
+## 実装済み機能
 - 各プロンプトカードに「👍使ってみた」ボタンとコピー計測を追加、`/api/feedback` でD1に保存
+- 「＋新しいプロンプトを作る」でその場生成(`/api/generate`)。提案はD1の `proposal_queue` に保存され、Slackへ通知
+- Slackで ✅ を付けると承認され `approved_prompts` に反映、`/api/extra-prompts` 経由でサイトに表示。❌ は却下
+- 月次バッチ(毎月1日18:00 UTC = 毎月2日03:00 JST)で全45場面をGeminiが自動評価し、`prompt_scores` / `evaluation_runs` に保存。低評価はSlackに報告
 
-## 未実装(次のステップ)
-- Step 3: 月次バッチのAI自動評価は `worker/index.js` にコード実装済みだが、実際のCronトリガー動作確認は未検証
-- Step 4: 「その場で新規プロンプトを生成」のフロントエンドUI(モーダル等)。バックエンドAPI `/api/generate` は実装済み
-- Step 5: Slack承認後にproposal_queueのstatusを更新し本番データへ反映する仕組み(現状はSlack通知のみで、承認後の自動反映ロジックは未実装)
-
-## Slack承認の仕組みについて
-現時点ではSlackへの通知(提案内容の投稿)までを実装しています。「✅リアクションで承認 → 自動的にdata/prompts.jsonへ反映 → 再デプロイ」まで自動化するには、Slack側のイベント購読(reaction_added)を受け取るWorkerエンドポイントの追加が必要です。これは次のステップで実装します。
+## 運用メモ
+- `wrangler.toml` の `[placement] region = "gcp:asia-northeast1"` は、Geminiの地域制限エラーを避けるための設定です(削除しない)。
+- デプロイはWrangler 4を使用します(`.github/workflows/deploy.yml` の `wranglerVersion`)。
+- `keep_vars = true` により、デプロイしてもCloudflareの変数(Secrets)は消えません。
+- 月次バッチが読む `site/data/prompts.json` は `data/prompts.json` と同じ内容にしてください。
+- Slack AppはEvent Subscriptions(`reaction_added`)を有効にし、Socket Modeをオフにしてください。
