@@ -43,3 +43,12 @@ CREATE TABLE IF NOT EXISTS proposal_queue (
   decided_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_proposal_status ON proposal_queue(status);
+
+-- Slackで承認された追加プロンプト(フロントの /api/extra-prompts が返す)
+CREATE TABLE IF NOT EXISTS approved_prompts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  subject_id TEXT NOT NULL,       -- 既存の教科・領域id、または新規名称
+  scene_title TEXT NOT NULL,
+  pdca_json TEXT NOT NULL,        -- {"p":"...","d":"...","c":"...","a":"..."}
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

@@ -2,15 +2,23 @@
  * prompt-koubou Worker (Phase 2)
  *
  * ルート:
- *  GET  /                 -> 静的サイト(site/index.html, assets binding経由)
- *  POST /api/feedback     -> フィードバック保存 (D1: feedback)
- *  POST /api/generate     -> その場生成 (Gemini API呼び出し、承認キューにも追加)
- *  Scheduled (cron)       -> 月次バッチ: 全プロンプト再評価 + 自動拡充提案 + Slack通知
+ *  GET  /                    -> 静的サイト(site/index.html, assets binding経由)
+ *  POST /api/feedback        -> フィードバック保存 (D1: feedback)
+ *  POST /api/generate        -> その場生成 (Gemini API呼び出し、承認キューにも追加)
+ *  GET  /api/extra-prompts   -> Slack承認済みの追加プロンプト一覧(フロントで既存データにマージ表示)
+ *  POST /slack/events        -> Slack Events API(reaction_addedで承認/却下を検知し自動反映)
+ *  Scheduled (cron)          -> 月次バッチ: 全プロンプト再評価 + 自動拡充提案 + Slack通知
  *
  * 必要なバインディング (wrangler.toml):
  *  - DB (D1 database)
  *  - ASSETS (静的アセット / site ディレクトリ)
  *  - Secrets: GEMINI_API_KEY, SLACK_BOT_TOKEN, SLACK_CHANNEL_ID
+ *
+ * Slack Events API利用には別途、Slack App側で以下が必要:
+ *  - Bot Token Scopeに reactions:read を追加して再インストール
+ *  - Event Subscriptions を有効化し、Request URLに
+ *    https://<worker-domain>/slack/events を設定
+ *  - Subscribe to bot events に reaction_added を追加
  */
 
 const GEMINI_MODEL = "gemini-2.5-flash";
@@ -26,6 +34,12 @@ export default {
     }
     if (url.pathname === "/api/generate" && request.method === "POST") {
       return handleGenerate(request, env);
+    }
+    if (url.pathname === "/api/extra-prompts" && request.method === "GET") {
+      return handleExtraPrompts(request, env);
+    }
+    if (url.pathname === "/slack/events" && request.method === "POST") {
+      return handleSlackEvents(request, env);
     }
     if (url.pathname === "/api/health") {
       return json({ ok: true });
@@ -99,19 +113,102 @@ async function handleGenerate(request, env) {
 
   const proposalId = result.meta.last_row_id;
 
-  // Slack承認依頼を送信(失敗してもユーザーへの応答は継続)
+  // Slack承認依頼を送信し、メッセージのtsをproposal_queueに記録(承認リアクション検知に使う)
   try {
-    await postSlackApproval(env, proposalId, {
+    const ts = await postSlackApproval(env, proposalId, {
       kind: "その場生成(教員リクエスト)",
       subject_name,
       scene_title,
       pdca,
     });
+    if (ts) {
+      await env.DB.prepare(
+        `UPDATE proposal_queue SET slack_message_ts = ? WHERE id = ?`
+      )
+        .bind(ts, proposalId)
+        .run();
+    }
   } catch (err) {
     console.error("slack post failed", err);
   }
 
   return json({ ok: true, pdca, proposal_id: proposalId });
+}
+
+// ---------- 承認済み追加プロンプトの取得 ----------
+async function handleExtraPrompts(request, env) {
+  const rows = await env.DB.prepare(
+    `SELECT id, subject_id, scene_title, pdca_json, created_at FROM approved_prompts ORDER BY created_at DESC`
+  ).all();
+
+  const items = rows.results.map((r) => ({
+    id: r.id,
+    subject_id: r.subject_id,
+    scene_title: r.scene_title,
+    pdca: JSON.parse(r.pdca_json),
+    created_at: r.created_at,
+  }));
+
+  return json({ items });
+}
+
+// ---------- Slack Events API (reaction_added で承認/却下を自動反映) ----------
+async function handleSlackEvents(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "invalid_json" }, 400);
+  }
+
+  // Slackがエンドポイント検証時に送ってくるチャレンジに応答
+  if (body.type === "url_verification") {
+    return json({ challenge: body.challenge });
+  }
+
+  if (body.type === "event_callback" && body.event) {
+    const ev = body.event;
+    if (ev.type === "reaction_added" && ev.item && ev.item.ts) {
+      await handleReaction(env, ev.reaction, ev.item.ts);
+    }
+  }
+
+  // Slackへは常に200を即返す(処理自体はここまでで完了、リトライ防止)
+  return json({ ok: true });
+}
+
+async function handleReaction(env, reaction, messageTs) {
+  const row = await env.DB.prepare(
+    `SELECT id, subject_id, scene_title, pdca_json, status FROM proposal_queue WHERE slack_message_ts = ?`
+  )
+    .bind(messageTs)
+    .first();
+
+  if (!row || row.status !== "pending") return; // 対象なし、または処理済み
+
+  if (reaction === "white_check_mark" || reaction === "+1") {
+    await env.DB.prepare(
+      `INSERT INTO approved_prompts (subject_id, scene_title, pdca_json) VALUES (?, ?, ?)`
+    )
+      .bind(row.subject_id, row.scene_title, row.pdca_json)
+      .run();
+
+    await env.DB.prepare(
+      `UPDATE proposal_queue SET status = 'approved', decided_at = datetime('now') WHERE id = ?`
+    )
+      .bind(row.id)
+      .run();
+
+    await postSlackReply(env, messageTs, "✅ 承認されました。サイトに反映されました(数分以内に表示されます)。");
+  } else if (reaction === "x") {
+    await env.DB.prepare(
+      `UPDATE proposal_queue SET status = 'rejected', decided_at = datetime('now') WHERE id = ?`
+    )
+      .bind(row.id)
+      .run();
+
+    await postSlackReply(env, messageTs, "❌ 却下されました。");
+  }
 }
 
 function buildGenerationPrompt({ subject_name, scene_title, grade }) {
@@ -230,16 +327,29 @@ async function postSlackApproval(env, proposalId, { kind, subject_name, scene_ti
     `*C・評価*: ${pdca.c}`,
     `*A・改善*: ${pdca.a}`,
     "",
-    `承認する場合はこのメッセージに :white_check_mark: でリアクションしてください (proposal_id=${proposalId})`,
+    `承認する場合はこのメッセージに :white_check_mark: 、却下する場合は :x: でリアクションしてください (proposal_id=${proposalId})`,
   ].join("\n");
 
-  await fetch("https://slack.com/api/chat.postMessage", {
+  const res = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${env.SLACK_BOT_TOKEN}`,
     },
     body: JSON.stringify({ channel: env.SLACK_CHANNEL_ID, text }),
+  });
+  const data = await res.json();
+  return data.ok ? data.ts : null;
+}
+
+async function postSlackReply(env, threadTs, text) {
+  await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${env.SLACK_BOT_TOKEN}`,
+    },
+    body: JSON.stringify({ channel: env.SLACK_CHANNEL_ID, text, thread_ts: threadTs }),
   });
 }
 

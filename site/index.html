@@ -293,6 +293,134 @@
     opacity:1;
     transform: translateX(-50%) translateY(0);
   }
+
+  .generate-open-btn{
+    align-self:flex-start;
+    margin-top:6px;
+    font-family:inherit;
+    font-size:13px;
+    font-weight:700;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border:1px solid var(--card-border);
+    border-radius:999px;
+    padding:8px 16px;
+    cursor:pointer;
+  }
+  .generate-open-btn:hover{ filter:brightness(0.97); }
+
+  .extra-section{
+    margin-top:34px;
+    padding-top:20px;
+    border-top:1px dashed var(--card-border);
+  }
+  .extra-section h2{
+    font-size:18px;
+    margin:0 0 4px;
+    color: var(--ink);
+  }
+  .extra-note{
+    margin:0 0 14px;
+    font-size:12.5px;
+    color: var(--ink-soft);
+  }
+
+  .modal-overlay{
+    position:fixed;
+    inset:0;
+    background: rgba(20,18,14,0.45);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    z-index:50;
+  }
+  .modal{
+    background: var(--card);
+    border:1px solid var(--card-border);
+    border-radius:14px;
+    padding:22px;
+    max-width:440px;
+    width:100%;
+    max-height:90vh;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .modal h2{
+    margin:0;
+    font-size:19px;
+  }
+  .modal-desc{
+    margin:0;
+    font-size:12.5px;
+    line-height:1.7;
+    color: var(--ink-soft);
+  }
+  .modal-label{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    font-size:12.5px;
+    font-weight:700;
+    color: var(--ink-soft);
+  }
+  .modal-label select,
+  .modal-label input{
+    font-family:inherit;
+    font-size:14px;
+    font-weight:400;
+    color: var(--ink);
+    background: var(--paper);
+    border:1px solid var(--card-border);
+    border-radius:8px;
+    padding:8px 10px;
+  }
+  .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-top:4px;
+  }
+  .modal-btn{
+    font-family:inherit;
+    font-size:13px;
+    font-weight:700;
+    border-radius:8px;
+    padding:8px 16px;
+    cursor:pointer;
+    border:1px solid var(--card-border);
+  }
+  .modal-btn.secondary{
+    background:transparent;
+    color: var(--ink-soft);
+  }
+  .modal-btn.secondary:hover{ background: var(--accent-soft); }
+  .modal-btn.primary{
+    background: var(--accent);
+    color: var(--card);
+    border-color: var(--accent);
+  }
+  .modal-btn.primary:hover{ filter:brightness(1.08); }
+  .modal-btn:disabled{ opacity:0.6; cursor:default; }
+
+  .gen-result{
+    margin-top:6px;
+    padding-top:12px;
+    border-top:1px solid var(--card-border);
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .gen-result .gen-status{
+    font-size:12.5px;
+    color: var(--ink-soft);
+    line-height:1.7;
+  }
+  .gen-result .card{
+    font-size:12.5px;
+  }
 </style>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -302,6 +430,7 @@
   <span class="eyebrow">prj-prompt-gen · 教職員向けプロンプト集</span>
   <h1>プロンプト工房 — 教科・領域 × 場面 × PDCA</h1>
   <p class="lede">教科・領域を選び、授業や指導の「場面」ごとに、Plan・Do・Check・Actの4段階で使える生成AIプロンプトの例をまとめています。そのままコピーして、【 】部分をご自身の状況に置き換えてお使いください。</p>
+  <button type="button" id="openGenerateBtn" class="generate-open-btn">＋ 新しいプロンプトを作る</button>
 </header>
 
 <nav class="subjects" id="subjectTabs" role="tablist" aria-label="教科・領域を選択"></nav>
@@ -314,12 +443,42 @@
 
 <main id="scenes"></main>
 
+<section id="extraSection" class="extra-section" hidden>
+  <h2>追加プロンプト(承認済み)</h2>
+  <p class="extra-note">教員のリクエストから作成され、Slackで承認されたプロンプトです。</p>
+  <div id="extraGrid" class="pdca-grid"></div>
+</section>
+
 <footer class="note">
   <strong>使い方のヒント：</strong>【 】で囲まれた部分（学年・単元名・児童の実態など）をご自身の状況に書き換えてから、生成AI（Geminiなど）に入力してください。P（計画）→D（実践）→C（評価）→A（改善）の順に使うと、一連の授業・指導の流れに沿ってプロンプトを活用できます。<br>
-  このページはPhase 1（プロンプト例の一覧表示）です。既存プロンプトの効果検証や自動生成の仕組みは、次のフェーズで検討予定です。
+  「＋ 新しいプロンプトを作る」から、その場になければAIに新しいプロンプト例を作ってもらえます。作成された内容はSlackでの確認を経てから正式にサイトに反映されます。
 </footer>
 
 <div id="toast" role="status" aria-live="polite"></div>
+
+<div id="generateModal" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="generateModalTitle">
+    <h2 id="generateModalTitle">新しいプロンプトを作る</h2>
+    <p class="modal-desc">教科・領域と場面を入力すると、AIがその場でPDCA形式のプロンプト例を作成します。作成された内容はSlackでの確認後、正式にサイトへ反映されます。</p>
+
+    <label class="modal-label">教科・領域
+      <select id="genSubject"></select>
+    </label>
+    <label class="modal-label">場面(例: 保護者対応の文書作成)
+      <input type="text" id="genScene" maxlength="60">
+    </label>
+    <label class="modal-label">学年(任意)
+      <input type="text" id="genGrade" maxlength="20" placeholder="例: 5年">
+    </label>
+
+    <div class="modal-actions">
+      <button type="button" id="genCancelBtn" class="modal-btn secondary">キャンセル</button>
+      <button type="button" id="genSubmitBtn" class="modal-btn primary">作成する</button>
+    </div>
+
+    <div id="genResult" class="gen-result" hidden></div>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -968,6 +1127,207 @@
   } catch(e){}
 
   selectSubject(initial);
+
+  // ---------- その場でプロンプトを生成するモーダル ----------
+  var generateModal = document.getElementById("generateModal");
+  var openGenerateBtn = document.getElementById("openGenerateBtn");
+  var genCancelBtn = document.getElementById("genCancelBtn");
+  var genSubmitBtn = document.getElementById("genSubmitBtn");
+  var genSubjectEl = document.getElementById("genSubject");
+  var genSceneEl = document.getElementById("genScene");
+  var genGradeEl = document.getElementById("genGrade");
+  var genResultEl = document.getElementById("genResult");
+
+  function populateGenSubjectOptions(){
+    genSubjectEl.innerHTML = "";
+    DATA.forEach(function(subject){
+      var opt = document.createElement("option");
+      opt.value = subject.name;
+      opt.textContent = subject.name;
+      genSubjectEl.appendChild(opt);
+    });
+  }
+
+  function openGenerateModal(){
+    populateGenSubjectOptions();
+    genSceneEl.value = "";
+    genGradeEl.value = "";
+    genResultEl.hidden = true;
+    genResultEl.innerHTML = "";
+    genSubmitBtn.disabled = false;
+    genSubmitBtn.textContent = "作成する";
+    generateModal.hidden = false;
+  }
+
+  function closeGenerateModal(){
+    generateModal.hidden = true;
+  }
+
+  if (openGenerateBtn) openGenerateBtn.addEventListener("click", openGenerateModal);
+  if (genCancelBtn) genCancelBtn.addEventListener("click", closeGenerateModal);
+  if (generateModal) {
+    generateModal.addEventListener("click", function(ev){
+      if (ev.target === generateModal) closeGenerateModal();
+    });
+  }
+
+  function renderGenResultCard(pdca){
+    genResultEl.innerHTML = "";
+    var status = document.createElement("p");
+    status.className = "gen-status";
+    status.textContent = "作成しました。内容はSlackでの確認後、正式にサイトへ反映されます。それまでの間、この画面でご確認いただけます。";
+    genResultEl.appendChild(status);
+
+    var grid = document.createElement("div");
+    grid.className = "pdca-grid";
+    ["p", "d", "c", "a"].forEach(function(stage){
+      if (!pdca || !pdca[stage]) return;
+      var card = document.createElement("article");
+      card.className = "card";
+
+      var chip = document.createElement("span");
+      chip.className = "chip " + stage;
+      chip.textContent = PDCA_LABEL[stage];
+      card.appendChild(chip);
+
+      var p = document.createElement("p");
+      p.innerHTML = highlightPlaceholders(pdca[stage]);
+      card.appendChild(p);
+
+      var actions = document.createElement("div");
+      actions.className = "card-actions";
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "copy-btn";
+      btn.textContent = "コピー";
+      btn.addEventListener("click", function(){ copyText(pdca[stage], btn); });
+      actions.appendChild(btn);
+      card.appendChild(actions);
+
+      grid.appendChild(card);
+    });
+    genResultEl.appendChild(grid);
+    genResultEl.hidden = false;
+  }
+
+  if (genSubmitBtn) {
+    genSubmitBtn.addEventListener("click", function(){
+      var subjectName = genSubjectEl.value;
+      var sceneTitle = genSceneEl.value.trim();
+      var grade = genGradeEl.value.trim();
+
+      if (!sceneTitle){
+        genSceneEl.focus();
+        return;
+      }
+
+      genSubmitBtn.disabled = true;
+      genSubmitBtn.textContent = "作成中…";
+      genResultEl.hidden = true;
+      genResultEl.innerHTML = "";
+
+      fetch("/api/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ subject_name: subjectName, scene_title: sceneTitle, grade: grade || null })
+      })
+        .then(function(res){ return res.json().then(function(data){ return { ok: res.ok, data: data }; }); })
+        .then(function(result){
+          genSubmitBtn.disabled = false;
+          genSubmitBtn.textContent = "作成する";
+          if (!result.ok || !result.data || !result.data.pdca){
+            genResultEl.innerHTML = '<p class="gen-status">作成に失敗しました。しばらくしてから再度お試しください。</p>';
+            genResultEl.hidden = false;
+            return;
+          }
+          renderGenResultCard(result.data.pdca);
+        })
+        .catch(function(){
+          genSubmitBtn.disabled = false;
+          genSubmitBtn.textContent = "作成する";
+          genResultEl.innerHTML = '<p class="gen-status">通信エラーが発生しました。しばらくしてから再度お試しください。</p>';
+          genResultEl.hidden = false;
+        });
+    });
+  }
+
+  // ---------- Slack承認済みの追加プロンプトを表示 ----------
+  var extraSectionEl = document.getElementById("extraSection");
+  var extraGridEl = document.getElementById("extraGrid");
+
+  function renderExtraPromptCard(item){
+    var block = document.createElement("section");
+    block.className = "scene-block";
+
+    var h3 = document.createElement("h3");
+    h3.innerHTML = '<span class="idx">' + escapeHtml(item.subject_id) + '</span> ' + escapeHtml(item.scene_title);
+    block.appendChild(h3);
+
+    var grid = document.createElement("div");
+    grid.className = "pdca-grid";
+
+    ["p", "d", "c", "a"].forEach(function(stage){
+      if (!item.pdca || !item.pdca[stage]) return;
+      var promptId = "extra-" + item.id + "-" + stage;
+      var card = document.createElement("article");
+      card.className = "card";
+
+      var chip = document.createElement("span");
+      chip.className = "chip " + stage;
+      chip.textContent = PDCA_LABEL[stage];
+      card.appendChild(chip);
+
+      var p = document.createElement("p");
+      p.innerHTML = highlightPlaceholders(item.pdca[stage]);
+      card.appendChild(p);
+
+      var actions = document.createElement("div");
+      actions.className = "card-actions";
+
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "copy-btn";
+      btn.textContent = "コピー";
+      btn.addEventListener("click", function(){
+        copyText(item.pdca[stage], btn);
+        sendFeedback(promptId, "copy");
+      });
+      actions.appendChild(btn);
+
+      var goodBtn = document.createElement("button");
+      goodBtn.type = "button";
+      goodBtn.className = "good-btn";
+      goodBtn.textContent = "👍 使ってみた";
+      goodBtn.addEventListener("click", function(){
+        sendFeedback(promptId, "good");
+        goodBtn.disabled = true;
+        goodBtn.textContent = "👍 ありがとうございます";
+      });
+      actions.appendChild(goodBtn);
+
+      card.appendChild(actions);
+      grid.appendChild(card);
+    });
+
+    block.appendChild(grid);
+    extraGridEl.appendChild(block);
+  }
+
+  function loadExtraPrompts(){
+    if (!extraGridEl || !extraSectionEl) return;
+    fetch("/api/extra-prompts")
+      .then(function(res){ return res.json(); })
+      .then(function(data){
+        var items = (data && data.items) || [];
+        if (!items.length) return;
+        extraGridEl.innerHTML = "";
+        items.forEach(renderExtraPromptCard);
+        extraSectionEl.hidden = false;
+      })
+      .catch(function(){ /* 取得失敗時は非表示のまま */ });
+  }
+
+  loadExtraPrompts();
 })();
 </script>
 </body>
