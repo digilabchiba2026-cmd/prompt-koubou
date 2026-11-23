@@ -386,6 +386,10 @@
     margin:0;
     font-size:19px;
   }
+  .privacy-note{
+    margin:12px 0; padding:10px 14px; font-size:13px; line-height:1.7;
+    background:var(--accent-soft); color:var(--ink); border-left:4px solid var(--accent); border-radius:6px;
+  }
   .modal-desc{
     margin:0;
     font-size:12.5px;
@@ -464,6 +468,7 @@
   <span class="eyebrow">prj-prompt-gen · 教職員向けプロンプト集</span>
   <h1>プロンプト工房 — 教科・領域 × 場面 × PDCA</h1>
   <p class="lede">教科・領域を選び、授業や指導の「場面」ごとに、Plan・Do・Check・Actの4段階で使える生成AIプロンプトの例をまとめています。そのままコピーして、【 】部分をご自身の状況に置き換えてお使いください。</p>
+  <p class="privacy-note">⚠ 児童生徒の氏名・成績・住所など、個人が特定できる情報は生成AIに入力しないでください。【 】の部分は、個人が特定されない形(「Aさん」「5年生の児童」など)で置き換えてお使いください。</p>
   <button type="button" id="openGenerateBtn" class="generate-open-btn">＋ 新しいプロンプトを作る</button>
 </header>
 
@@ -493,7 +498,7 @@
 <div id="generateModal" class="modal-overlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="generateModalTitle">
     <h2 id="generateModalTitle">新しいプロンプトを作る</h2>
-    <p class="modal-desc">教科・領域と場面を入力すると、AIがその場でPDCA形式のプロンプト例を作成します。作成された内容はSlackでの確認後、正式にサイトへ反映されます。</p>
+    <p class="modal-desc">教科・領域と場面を入力すると、AIがその場でPDCA形式のプロンプト例を作成します。作成された内容はSlackでの確認後、正式にサイトへ反映されます。児童生徒の氏名など、個人が特定できる情報は入力しないでください。</p>
 
     <label class="modal-label">教科・領域
       <select id="genSubject"></select>
@@ -1695,7 +1700,9 @@
           genSubmitBtn.disabled = false;
           genSubmitBtn.textContent = "作成する";
           if (!result.ok || !result.data || !result.data.pdca){
-            genResultEl.innerHTML = '<p class="gen-status">作成に失敗しました。しばらくしてから再度お試しください。</p>';
+            var msg = (result.data && result.data.message) ? result.data.message : "作成に失敗しました。しばらくしてから再度お試しください。";
+            genResultEl.innerHTML = '<p class="gen-status"></p>';
+            genResultEl.firstChild.textContent = msg;
             genResultEl.hidden = false;
             return;
           }
