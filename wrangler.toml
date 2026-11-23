@@ -6,6 +6,7 @@ keep_vars = true
 [observability]
 enabled = true
 
+# Geminiの地域制限エラーを避けるための配置ヒント(削除しない)
 [placement]
 region = "gcp:asia-northeast1"
 
@@ -14,18 +15,17 @@ region = "gcp:asia-northeast1"
 directory = "./site"
 binding = "ASSETS"
 
-# D1データベース (事前に `wrangler d1 create prompt-koubou-db` で作成し、
-# 出力された database_id をここに貼り付けてください)
 [[d1_databases]]
 binding = "DB"
 database_name = "prompt-koubou-db"
 database_id = "536171a3-75ed-4789-8a3c-0f9a0abe5b75"
 
-# 月次バッチ(毎月2日 03:00 JST = 毎月1日 18:00 UTC)
+# 月次バッチ(毎月2日・3日 03:00 JST = 毎月1日・2日 18:00 UTC。場面が多いため2日に分けて評価)
 [triggers]
-crons = ["0 18 1 * *"]
+crons = ["0 18 1,2 * *"]
 
 # Secrets(値はリポジトリに含めない。以下のコマンドで別途登録):
 #   wrangler secret put GEMINI_API_KEY
 #   wrangler secret put SLACK_BOT_TOKEN
 #   wrangler secret put SLACK_CHANNEL_ID
+#   wrangler secret put SLACK_SIGNING_SECRET

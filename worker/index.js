@@ -54,7 +54,7 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runMonthlyBatch(env));
+    ctx.waitUntil(runMonthlyBatch(env, event.scheduledTime));
   },
 };
 
@@ -341,13 +341,16 @@ async function callGemini(apiKey, promptText) {
 
 // ---------- 月次バッチ: 自動評価 + 自動拡充提案 ----------
 // 制約への配慮:
-//  - 1場面(P/D/C/Aの4プロンプト)を1回のGemini呼び出しで評価する(外部通信は全45回程度)
+//  - 1場面(P/D/C/Aの4プロンプト)を1回のGemini呼び出しで評価する(外部通信は1回の実行で最大43回、全場面は2日に分けて評価)
 //  - Gemini無料枠の速度制限(毎分10回程度)に合わせ、呼び出し間に待機を入れる
 //  - D1への書き込みは最後に1回のbatchでまとめる
 const BATCH_WAIT_MS = 6500;
+// Workers無料枠の外部通信上限(50回/実行)に収めるため、1回の実行で評価する場面数の上限。
+// 場面が多い場合は複数日に分割し、実行日(UTC)の日番号で担当ブロックを決める(1日→1番目、2日→2番目…)。
+const BATCH_MAX_SCENES = 43;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function runMonthlyBatch(env) {
+async function runMonthlyBatch(env, scheduledTime) {
   const promptsRes = await env.ASSETS.fetch(
     new Request("https://internal/data/prompts.json")
   );
@@ -360,14 +363,26 @@ async function runMonthlyBatch(env) {
   }
   const subjects = await promptsRes.json();
 
+  // 全場面を1列に並べ、今回の担当ブロックだけを評価する
+  const all = [];
+  for (const subject of subjects) {
+    for (let i = 0; i < subject.scenes.length; i++) {
+      all.push({ subject, i, scene: subject.scenes[i] });
+    }
+  }
+  const blocks = Math.max(1, Math.ceil(all.length / BATCH_MAX_SCENES));
+  const day = new Date(scheduledTime || Date.now()).getUTCDate();
+  const block = (day - 1) % blocks;
+  const targets = all.slice(block * BATCH_MAX_SCENES, (block + 1) * BATCH_MAX_SCENES);
+  console.log(`batch block ${block + 1}/${blocks}: ${targets.length} scenes of ${all.length}`);
+
   const stmts = [];
   let evaluated = 0;
   let attempted = 0;
   let first = true;
 
-  for (const subject of subjects) {
-    for (let i = 0; i < subject.scenes.length; i++) {
-      const scene = subject.scenes[i];
+  for (const { subject, i, scene } of targets) {
+    {
       attempted += 4;
       if (!first) await sleep(BATCH_WAIT_MS);
       first = false;
